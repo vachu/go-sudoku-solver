@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"vatsan.in/sudoku/board"
 )
@@ -17,8 +18,35 @@ func main() {
 			number++
 		}
 	}
-	for i := 0; i < 9; i++ {
-		row, _ := board.GetRow(i)
-		fmt.Println(row)
+
+	if file, e := os.Create("C:\\temp\\sudoku.dat"); e != nil {
+		fmt.Fprintf(os.Stderr, "Error - %v\n", e)
+	} else {
+		if e = board.Write(file); e != nil {
+			fmt.Fprintf(os.Stderr, "Error - %v\n", e)
+		}
+		file.Close()
 	}
+	// board.Write(os.Stdout)
+
+	if file, e := os.Open("C:\\temp\\sudoku.dat"); e != nil {
+		fmt.Fprintln(os.Stderr, e)
+	} else {
+		if e = board.Read(file); e != nil {
+			fmt.Fprintln(os.Stderr, e)
+		} else {
+			board.BeautyPrint(os.Stdout)
+		}
+		file.Close()
+	}
+
+	// if e := board.SetCellValue(0, 5, 9); e != nil {
+	// 	fmt.Println("ERROR -", e)
+	// }
+	// if e := board.SetCellValue(3, 0, 3); e != nil {
+	// 	fmt.Println("ERROR -", e)
+	// }
+	// if e := board.SetCellValue(4, 4, 1); e != nil {
+	// 	fmt.Println("ERROR -", e)
+	// }
 }
