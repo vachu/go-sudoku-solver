@@ -1,6 +1,9 @@
 package board
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestNewBoard(t *testing.T) {
 	b := NewBoard()
@@ -121,11 +124,21 @@ func TestSetCellValue(t *testing.T) {
 		{0, 0, 9, false},
 		{9, 0, 9, true},
 		{10, 0, 9, true},
-		{8, 0, 9, false},
+		{8, 0, 9, true},
+		{8, 1, 9, false},
 		{0, -1, 9, true},
 		{0, 9, 9, true},
 		{0, 10, 9, true},
-		{0, 8, 9, false},
+		{0, 8, 9, true},
+		{7, 8, 9, false},
+		{0, 8, 9, true},
+		{0, 8, 8, false},
+		{1, 6, 8, true},
+		{0, 5, 9, true},
+		{0, 5, 8, true},
+		{0, 5, 7, false},
+		{4, 1, 9, true},
+		{4, 1, 8, false},
 	}
 	for _, d := range data {
 		if e := b.SetCellValue(d.rowIndex, d.colIndex, d.value); e != nil && !d.wantError {
@@ -222,10 +235,99 @@ func TestGetSquare(t *testing.T) {
 			number += 1
 		}
 	}
-	expectedSquare := [9]byte{1, 2, 3, 4, 5, 6, 7, 8, 9}
-	if row, e := b.GetSquare(7); e != nil {
+	expectedSquare := [3][3]byte{
+		{1, 2, 3},
+		{4, 5, 6},
+		{7, 8, 9},
+	}
+	if sq, e := b.GetSquare(7); e != nil {
 		t.Errorf("Got error: %v", e)
-	} else if row != expectedSquare {
-		t.Errorf("wanted %v but got %v", expectedSquare, row)
+	} else if sq != expectedSquare {
+		t.Errorf("wanted %v but got %v", expectedSquare, sq)
+	}
+}
+
+func Test_has(t *testing.T) {
+	board := NewBoard()
+	for i := 0; i < 9; i++ {
+		board.cells[0][i] = byte(i) + 1
+	}
+	*board.rows[0][4] = 0
+
+	data := []struct {
+		value         byte
+		expectedHas   bool
+		expectedIndex int
+	}{
+		{0, true, 4},
+		{1, true, 0},
+		{8, true, 7},
+		{5, false, -1},
+		{10, false, -2},
+		{9, true, 8},
+	}
+	for _, d := range data {
+		if has, index := board.rows[0].has(d.value); has != d.expectedHas {
+			t.Errorf("expected has to be '%v' but got '%v'", d.expectedHas, has)
+		} else if index != d.expectedIndex {
+			t.Errorf("expected index to be '%v' but got '%v'", d.expectedIndex, index)
+		}
+	}
+}
+
+func TestReadWrite(t *testing.T) {
+	board := NewBoard()
+	startCell := 3
+	startCol := 3
+	number := byte(1)
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			board.SetCellValue(startCell+i, startCol+j, number)
+			number++
+		}
+	}
+
+	var b bytes.Buffer
+	if e := board.Write(&b); e != nil {
+		t.Errorf("got an error while writing - %v", e)
+	}
+
+	board2 := NewBoard()
+	if e := board2.Read(&b); e != nil {
+		t.Errorf("got an error while reading - %v", e)
+	}
+
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if board.cells[i][j] != board2.cells[i][j] {
+				t.Errorf("cells [%d][%d] are different - %d, %d",
+					i, j, board.cells[i][j], board2.cells[i][j],
+				)
+			}
+		}
+	}
+}
+
+func TestClear(t *testing.T) {
+	board := NewBoard()
+	startRow, startCol := 3, 3
+	number := byte(1)
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			board.SetCellValue(startRow+i, startCol+j, number)
+			number++
+		}
+	}
+
+	board.Clear()
+	board2 := NewBoard()
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if board.cells[i][j] != board2.cells[i][j] {
+				t.Errorf("cells [%d][%d] are different - %d, %d",
+					i, j, board.cells[i][j], board2.cells[i][j],
+				)
+			}
+		}
 	}
 }
