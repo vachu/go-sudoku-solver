@@ -170,6 +170,15 @@ func TestSetCellValue(t *testing.T) {
 			}
 		}
 	}
+
+	if e := b.SetCellValue(4, 5, 1); e == nil {
+		t.Error("expected error")
+	}
+
+	b.SetOverwriteFlag(true)
+	if e := b.SetCellValue(4, 5, 1); e != nil {
+		t.Errorf("unexpected error - %v", e)
+	}
 }
 
 func TestClearCellValue(t *testing.T) {
@@ -198,6 +207,11 @@ func TestClearCellValue(t *testing.T) {
 	}
 
 	b.cells[4][5] = 9
+	if e := b.ClearCellValue(4, 5); e == nil {
+		t.Error("error expected")
+	}
+
+	b.SetOverwriteFlag(true)
 	if e := b.ClearCellValue(4, 5); e != nil {
 		t.Errorf("got an unexpected error - %v", e)
 	} else if b.cells[4][5] != 0 {
@@ -319,15 +333,97 @@ func TestClear(t *testing.T) {
 		}
 	}
 
+	if e := board.Clear(); e == nil {
+		t.Error("expected error") // canOverwrite flag is 'false' by default so error expected
+	}
+
+	board.canOverwrite = true
 	board.Clear()
-	board2 := NewBoard()
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
-			if board.cells[i][j] != board2.cells[i][j] {
-				t.Errorf("cells [%d][%d] are different - %d, %d",
-					i, j, board.cells[i][j], board2.cells[i][j],
+			if board.cells[i][j] != 0 {
+				t.Errorf("cell[%d][%d] has non-zero value - %d", i, j, board.cells[i][j])
+			}
+		}
+	}
+}
+
+func Test_getRowColIndices(t *testing.T) {
+	data := []struct {
+		sqIndex          int
+		elemIndex        int
+		wantError        bool
+		expectedRowIndex int
+		expectedColIndex int
+	}{
+		{-1, 0, true, 0, 0},
+		{9, 0, true, 0, 0},
+		{0, -1, true, 0, 0},
+		{0, 9, true, 0, 0},
+		{0, 0, false, 0, 0},
+		{0, 4, false, 1, 1},
+		{0, 8, false, 2, 2},
+		{4, 0, false, 3, 3},
+		{4, 4, false, 4, 4},
+		{4, 8, false, 5, 5},
+		{8, 0, false, 6, 6},
+		{8, 4, false, 7, 7},
+		{8, 8, false, 8, 8},
+	}
+	for _, d := range data {
+		if r, c, e := GetRowColIndices(d.sqIndex, d.elemIndex); d.wantError && e == nil {
+			t.Error("expected error")
+		} else if !d.wantError && e != nil {
+			t.Errorf("got unexpected error - %v", e)
+		} else if e == nil {
+			if r != d.expectedRowIndex || c != d.expectedColIndex {
+				t.Errorf("expected (rowIndex, colIndex) to be (%d, %d) but got (%d, %d)",
+					d.expectedRowIndex, d.expectedColIndex, r, c,
 				)
 			}
 		}
+	}
+}
+
+func TestCopyFrom(t *testing.T) {
+	b1, b2 := NewBoard(), NewBoard()
+	number := byte(1)
+	for i := 6; i < 9; i++ {
+		for j := 6; j < 9; j++ {
+			b1.cells[i][j] = number
+			number++
+		}
+	}
+
+	b2.CopyFrom(b1)
+	for i := 0; i < 9; i++ {
+		r1, r2 := b1.rows[i], b2.rows[i]
+		for j := 0; j < 9; j++ {
+			if *r1[j] != *r2[j] {
+				t.Errorf("expected value of cell[%d][%d] in boards b1 and b2 to be equal", i, j)
+			}
+		}
+	}
+}
+
+func TestGetOverwriteFlag(t *testing.T) {
+	b := NewBoard()
+	if b.GetOverwriteFlag() {
+		t.Error("expected overwrite Flag to be set to 'false'")
+	}
+
+	b.canOverwrite = true
+	if !b.GetOverwriteFlag() {
+		t.Error("expected overwrite Flag to be set to 'true'")
+	}
+}
+
+func TestSetOverwriteFlag(t *testing.T) {
+	b := NewBoard()
+	if b.SetOverwriteFlag(true); !b.canOverwrite {
+		t.Error("expected overwrite flag set to 'true'")
+	}
+	if b.SetOverwriteFlag(false); b.canOverwrite {
+		t.Error("expected overwrite flag set to 'false'")
 	}
 }

@@ -9,27 +9,27 @@ import (
 
 func main() {
 	board := board.NewBoard()
-	startCell := 3
-	startCol := 3
-	number := byte(1)
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			board.SetCellValue(startCell+i, startCol+j, number)
-			number++
-		}
-	}
+	// startCell := 3
+	// startCol := 3
+	// number := byte(1)
+	// for i := 0; i < 3; i++ {
+	// 	for j := 0; j < 3; j++ {
+	// 		board.SetCellValue(startCell+i, startCol+j, number)
+	// 		number++
+	// 	}
+	// }
 
-	if file, e := os.Create("C:\\temp\\sudoku.dat"); e != nil {
-		fmt.Fprintf(os.Stderr, "Error - %v\n", e)
-	} else {
-		if e = board.Write(file); e != nil {
-			fmt.Fprintf(os.Stderr, "Error - %v\n", e)
-		}
-		file.Close()
-	}
+	// if file, e := os.Create("C:\\temp\\sudoku.dat"); e != nil {
+	// 	fmt.Fprintf(os.Stderr, "Error - %v\n", e)
+	// } else {
+	// 	if e = board.Write(file); e != nil {
+	// 		fmt.Fprintf(os.Stderr, "Error - %v\n", e)
+	// 	}
+	// 	file.Close()
+	// }
 	// board.Write(os.Stdout)
 
-	if file, e := os.Open("C:\\temp\\sudoku.dat"); e != nil {
+	if file, e := os.Open("C:\\temp\\sudoku2.txt"); e != nil {
 		fmt.Fprintln(os.Stderr, e)
 	} else {
 		if e = board.Read(file); e != nil {

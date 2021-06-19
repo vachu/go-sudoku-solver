@@ -8,17 +8,15 @@ import (
 
 type block [9]*byte
 
-// Block defines the type for a 9-element array of bytes
-type Block [9]byte
-
-// Type Board defines the main Sudoku Boarod of 9x9 cells.  None of the fields
+// Type Board defines the main Sudoku Board of 9x9 cells.  None of the fields
 // are exported
 type Board struct {
-	cells   [9][9]byte  // individual cells containing numbers 1 to 9
-	rows    [9]block    // each row has pointers to 9 cells horizontally across the board
-	cols    [9]block    // each col has pointers to 9 cells vertically across the board
-	squares [9]block    // linear array of 9 cells having pointers to 3x3 squares
-	m       *sync.Mutex // mutex to synchronize read and writes to cells
+	cells        [9][9]byte  // individual cells containing numbers 1 to 9
+	rows         [9]block    // each row has pointers to 9 cells horizontally across the board
+	cols         [9]block    // each col has pointers to 9 cells vertically across the board
+	squares      [9]block    // linear array of 9 cells having pointers to 3x3 squares
+	canOverwrite bool        // flag that indicates whether non-zero cells could be overwritten or not
+	m            *sync.Mutex // mutex to synchronize read and writes to cells
 }
 
 // NewBoard returns an zero-initialized new Sudoku Board
@@ -37,6 +35,24 @@ func NewBoard() *Board {
 		}
 	}
 	return &board
+}
+
+func (b *Board) CopyFrom(b2 *Board) (e error) {
+	b.m.Lock()
+	b2.m.Lock()
+OUTER_FOR:
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			if !b.canOverwrite && b.cells[i][j] > 0 {
+				e = fmt.Errorf("overwrite-flag set to 'false'; cannot overwrite cell[%d][%d]", i, j)
+				break OUTER_FOR
+			}
+			b.cells[i][j] = b2.cells[i][j]
+		}
+	}
+	b.m.Unlock()
+	b2.m.Unlock()
+	return
 }
 
 // GetRow returns an array containing the cell values for the specified row index (0 - 8).
@@ -94,9 +110,16 @@ func (b *Board) SetCellValue(rowIndex, colIndex int, value byte) (e error) {
 	} else if value < 1 || value > 9 {
 		e = fmt.Errorf("'%d' - value out of range", value)
 	} else {
-		sqIndex := (rowIndex/3)*3 + colIndex/3
 		b.m.Lock()
+		defer b.m.Unlock()
+
 		prevValue := b.cells[rowIndex][colIndex]
+		if !b.canOverwrite && prevValue > 0 {
+			e = fmt.Errorf("overwrite-flag set to 'false'; cannot overwrite non-zero-value-cells")
+			return
+		}
+
+		sqIndex := (rowIndex/3)*3 + colIndex/3
 		b.cells[rowIndex][colIndex] = 0 // clear the cell for which new value has to be set
 		if hasValue, index := b.rows[rowIndex].has(value); hasValue {
 			// if the value to be set is present in any other cell in the containing row
@@ -113,7 +136,6 @@ func (b *Board) SetCellValue(rowIndex, colIndex int, value byte) (e error) {
 		} else {
 			b.cells[rowIndex][colIndex] = value // set the new value
 		}
-		b.m.Unlock()
 	}
 	return
 }
@@ -127,8 +149,13 @@ func (b *Board) ClearCellValue(rowIndex, colIndex int) (e error) {
 		e = fmt.Errorf("colIndex out of range")
 	} else {
 		b.m.Lock()
+		defer b.m.Unlock()
+
+		if !b.canOverwrite && b.cells[rowIndex][colIndex] > 0 {
+			e = fmt.Errorf("overwrite-flag set to 'false'; cannot clear non-zero-value-cell")
+			return
+		}
 		b.cells[rowIndex][colIndex] = 0
-		b.m.Unlock()
 	}
 	return
 }
@@ -167,14 +194,19 @@ func (b *block) has(value byte) (hasValue bool, index int) {
 	return
 }
 
-func (b *Board) Clear() {
+func (b *Board) Clear() error {
 	b.m.Lock()
+	defer b.m.Unlock()
+
+	if !b.canOverwrite {
+		return fmt.Errorf("overwrite-flag set to 'false'; cannot clear cells")
+	}
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
 			b.cells[i][j] = 0
 		}
 	}
-	b.m.Unlock()
+	return nil
 }
 
 func (b *Board) BeautyPrint(w io.Writer) {
@@ -217,7 +249,7 @@ func (b *Board) Read(r io.Reader) error {
 			return fmt.Errorf("error reading line from input - %v", e)
 		}
 		if n != 9 {
-			return fmt.Errorf("only %d instead of item(s) read", n)
+			return fmt.Errorf("only %d item(s) instead of 9 read", n)
 		}
 		for j := 0; j < 9; j++ {
 			if c[j] > 0 {
@@ -231,9 +263,45 @@ func (b *Board) Read(r io.Reader) error {
 	b.m.Lock()
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
+			if !b.canOverwrite && b.cells[i][j] > 0 {
+				return fmt.Errorf("cannot overwrite cell[%d][%d] with value '%d'",
+					i, j, b.cells[i][j],
+				)
+			}
 			b.cells[i][j] = newBoard.cells[i][j]
 		}
 	}
 	b.m.Unlock()
 	return nil
+}
+
+// SetOverwriteFlag sets the flag that indicates whether non-zero-valued cells
+// could be overwritten (set to 'true') or not (set to 'false').
+// NOTE - setting this flag to 'true' affects all methods that set / clear values in cells / board
+func (b *Board) SetOverwriteFlag(canOverwrite bool) {
+	b.m.Lock()
+	b.canOverwrite = canOverwrite
+	b.m.Unlock()
+}
+
+// GetOverwriteFlag get the value of the flag that indicates whether non-zero-valued cells
+// could be overwritten (set to 'true') or not (set to 'false')
+func (b *Board) GetOverwriteFlag() (canOverwrite bool) {
+	b.m.Lock()
+	canOverwrite = b.canOverwrite
+	b.m.Unlock()
+
+	return
+}
+
+func GetRowColIndices(sqIndex, elemIndex int) (rowIndex, colIndex int, e error) {
+	if sqIndex < 0 || sqIndex > 8 {
+		e = fmt.Errorf("sqIndex out of bounds - %d", sqIndex)
+	} else if elemIndex < 0 || elemIndex > 8 {
+		e = fmt.Errorf("elemIndex out of bounds - %d", elemIndex)
+	} else {
+		rowIndex = (sqIndex/3)*3 + elemIndex/3
+		colIndex = (sqIndex%3)*3 + elemIndex%3
+	}
+	return
 }
