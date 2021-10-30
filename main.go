@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"vatsan.in/sudoku/board"
+	"github.com/vachu/go-sudoku-board/board"
 )
 
 func main() {
